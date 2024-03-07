@@ -13,13 +13,13 @@ public class AudioTrackPlayer {
     final int SINUS_SCALE = 200;
 
     private static void printLog(String str) {
-        android.util.Log.d("zzz", str);
+        android.util.Log.d("audiotest", str);
     }
 
     class PlaybackThread extends Thread {
         @Override
         public void run() {
-            printLog("AT playbackThread BEGIN");
+            printLog("AudioTrack playback thread started");
             final int size = 1024;
             byte[] buffer = new byte[size];
             while (mRunning)
@@ -37,17 +37,25 @@ public class AudioTrackPlayer {
 //                    throw new RuntimeException(e);
 //                }
             }
-            printLog("AT playbackThread END");
+            printLog("AudioTrack playback thread stopped");
         }
     }
 
     public void start() {
+        if (mRunning) {
+            printLog("AudioTrack player already started!");
+            return;
+        }
+
         int sampleRate = 44100;
         int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
+        int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+        int audioUsage = AudioAttributes.USAGE_GAME;
+        int contentType = AudioAttributes.CONTENT_TYPE_MUSIC;
 
         AudioAttributes aa = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .setUsage(audioUsage)
+                .setContentType(contentType)
                 .build();
 
         AudioFormat af = new AudioFormat.Builder()
@@ -55,9 +63,11 @@ public class AudioTrackPlayer {
                 .setChannelMask(channelConfig)
                 .build();
 
-        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT);
+        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat);
 
         mTrack = new AudioTrack(aa, af, minBufferSize, AudioTrack.MODE_STREAM, 0);
+        printLog("AudioTrack player created: sample_rate=" + sampleRate + " channel_config="
+                + channelConfig + " format=" + audioFormat + " usage=" + audioUsage + " content=" + contentType);
 
         mTrack.play();
 
@@ -67,6 +77,11 @@ public class AudioTrackPlayer {
     }
 
     public void stop() {
+        if (!mRunning) {
+            printLog("AudioTrack player not started!");
+            return;
+        }
+
         mRunning = false;
         try {
             mThread.join();
@@ -74,8 +89,11 @@ public class AudioTrackPlayer {
             throw new RuntimeException(e);
         }
 
-        mTrack.stop();
-        mTrack.release();
-        mTrack = null;
+        if (mTrack != null) {
+            mTrack.stop();
+            mTrack.release();
+            mTrack = null;
+            printLog("AudioTrack player destroyed");
+        }
     }
 }
