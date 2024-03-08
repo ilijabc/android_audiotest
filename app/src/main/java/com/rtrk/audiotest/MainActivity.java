@@ -9,18 +9,15 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
+
 public class MainActivity extends Activity {
-
-    static {
-        System.loadLibrary("audiotest");
-    }
-
-    native private void startAAudioPlayback(int player_id);
-    native private void stopAAudioPlayback(int player_id);
-
     LinearLayout mMainView;
 
+    ArrayList<IPlayer> mPlayerList = new ArrayList<>();
+
     AudioTrackPlayer mPlayer = new AudioTrackPlayer();
+    AAudioPlayer aplayer;
 
     final int max_players = 20;
 
@@ -48,11 +45,19 @@ public class MainActivity extends Activity {
             final int player_id = i;
             Button buttonStart = new Button(this);
             buttonStart.setText("start AAudio " + i);
-            buttonStart.setOnClickListener(v -> { startAAudioPlayback(player_id); });
+            buttonStart.setOnClickListener(v -> {
+                aplayer = new AAudioPlayer();
+                aplayer.start();
+
+            });
             layout.addView(buttonStart);
             Button buttonStop = new Button(this);
             buttonStop.setText("stop AAudio " + i);
-            buttonStop.setOnClickListener(v -> { stopAAudioPlayback(player_id); });
+            buttonStop.setOnClickListener(v -> {
+                aplayer.stop();
+                aplayer.release();
+                aplayer = null;
+            });
             layout.addView(buttonStop);
         }
 
@@ -81,7 +86,7 @@ public class MainActivity extends Activity {
         super.onStop();
 
         for (int i = 0; i < max_players; i++) {
-            stopAAudioPlayback(i);
+//            stopAAudioPlayback(i);
         }
         mPlayer.stop();
     }
