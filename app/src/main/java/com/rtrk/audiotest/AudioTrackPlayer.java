@@ -5,7 +5,7 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-public class AudioTrackPlayer {
+public class AudioTrackPlayer implements IPlayer {
     AudioTrack mTrack;
     boolean mRunning = false;
     PlaybackThread mThread;
@@ -41,12 +41,7 @@ public class AudioTrackPlayer {
         }
     }
 
-    public void start() {
-        if (mRunning) {
-            printLog("AudioTrack player already started!");
-            return;
-        }
-
+    public AudioTrackPlayer() {
         int sampleRate = 44100;
         int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
@@ -68,6 +63,18 @@ public class AudioTrackPlayer {
         mTrack = new AudioTrack(aa, af, minBufferSize, AudioTrack.MODE_STREAM, 0);
         printLog("AudioTrack player created: sample_rate=" + sampleRate + " channel_config="
                 + channelConfig + " format=" + audioFormat + " usage=" + audioUsage + " content=" + contentType);
+    }
+
+    public void start() {
+        if (mRunning) {
+            printLog("AudioTrack player already started!");
+            return;
+        }
+
+        if (mTrack == null) {
+            printLog("AudioTrack player not created!");
+            return;
+        }
 
         mTrack.play();
 
@@ -89,11 +96,22 @@ public class AudioTrackPlayer {
             throw new RuntimeException(e);
         }
 
-        if (mTrack != null) {
-            mTrack.stop();
-            mTrack.release();
-            mTrack = null;
-            printLog("AudioTrack player destroyed");
+        mTrack.stop();
+    }
+
+    @Override
+    public void release() {
+        if (mTrack == null) {
+            printLog("AudioTrack player already released!");
+            return;
         }
+
+        if (mRunning) {
+            stop();
+        }
+
+        mTrack.release();
+        mTrack = null;
+        printLog("AudioTrack player destroyed");
     }
 }
