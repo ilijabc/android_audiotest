@@ -38,6 +38,14 @@ public class MainActivity extends Activity {
         add(new Pair("USAGE_ASSISTANT", 16));
     }};
 
+    ArrayList<Pair<String, Integer>> mContentList = new ArrayList<Pair<String, Integer>>() {{
+        add(new Pair("CONTENT_TYPE_UNKNOWN", 0));
+        add(new Pair("CONTENT_TYPE_SPEECH", 1));
+        add(new Pair("CONTENT_TYPE_MUSIC", 2));
+        add(new Pair("CONTENT_TYPE_MOVIE", 3));
+        add(new Pair("CONTENT_TYPE_SONIFICATION", 4));
+    }};
+
     class PlayerItemView extends LinearLayout {
         private final IPlayer player;
         private final PlayerType type;
@@ -53,7 +61,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        public PlayerItemView(Context context, IPlayer player, PlayerType type, boolean isPlaying, String usage) {
+        public PlayerItemView(Context context, IPlayer player, PlayerType type, boolean exclusive, boolean low_latency, boolean isPlaying, String usage, String content) {
             super(context);
             this.player = player;
             this.type = type;
@@ -63,7 +71,11 @@ public class MainActivity extends Activity {
             addView(button);
 
             TextView infoText = new TextView(context);
-            infoText.setText("player=" + type + " exclusive=" + player.isExclusive() + " low_latency=" + player.isLowLatency() + " usage=" + usage + " mmap=" + player.isMMap());
+            if (type == PlayerType.AAudioPlayerType) {
+                infoText.setText("player=" + type + " exclusive=" + exclusive + " low_latency=" + low_latency + " usage=" + usage + " mmap=" + player.isMMap());
+            } else {
+                infoText.setText("player=" + type + " usage=" + usage + " content=" + content);
+            }
             addView(infoText);
 
             setOrientation(HORIZONTAL);
@@ -83,10 +95,11 @@ public class MainActivity extends Activity {
 
     LinearLayout mMainView;
     LinearLayout mListView;
+    ScrollView mScrollView;
 
     ArrayList<IPlayer> mPlayerList = new ArrayList<>();
 
-    private IPlayer addPlayer(PlayerType type, boolean exclusive, boolean lowlatency, boolean autoplay, String usage) {
+    private IPlayer addPlayer(PlayerType type, boolean exclusive, boolean low_latency, boolean autoplay, String usage, String content) {
         int usageId = 0;
         for (Pair<String, Integer> p : mUsageList) {
             if (p.first.equals(usage)) {
@@ -95,19 +108,28 @@ public class MainActivity extends Activity {
             }
         }
 
+        int contentId = 0;
+        for (Pair<String, Integer> p : mContentList) {
+            if (p.first.equals(usage)) {
+                contentId = p.second;
+                break;
+            }
+        }
+
         IPlayer player = null;
         if (type == PlayerType.AAudioPlayerType) {
-            player = new AAudioPlayer(exclusive, lowlatency, usageId);
+            player = new AAudioPlayer(exclusive, low_latency, usageId);
         } else {
-            player = new AudioTrackPlayer(usageId);
+            player = new AudioTrackPlayer(usageId, contentId);
         }
         if (autoplay) {
             player.start();
         }
         mPlayerList.add(player);
         {
-            PlayerItemView item = new PlayerItemView(this, player, type, autoplay, usage);
+            PlayerItemView item = new PlayerItemView(this, player, type, exclusive, low_latency, autoplay, usage, content);
             mListView.addView(item);
+            mScrollView.post(() -> { mScrollView.scrollTo(0, mScrollView.getBottom()); });
         }
         return player;
     }
@@ -133,6 +155,11 @@ public class MainActivity extends Activity {
             usageList.add(p.first);
         }
 
+        ArrayAdapter<String> contentList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
+        for (Pair<String, Integer> p : mContentList) {
+            contentList.add(p.first);
+        }
+
         // Main menu
         {
             // first menu
@@ -154,49 +181,61 @@ public class MainActivity extends Activity {
             checkAutoPlay.setText("Auto Play");
             checkAutoPlay.setChecked(true);
             menu1.addView(checkAutoPlay);
-            Spinner spinnerUsage = new Spinner(this);
-            spinnerUsage.setAdapter(usageList);
-            menu1.addView(spinnerUsage);
             // second menu
             LinearLayout menu2 = new LinearLayout(this);
             menu2.setOrientation(LinearLayout.HORIZONTAL);
             mMainView.addView(menu2);
+            Spinner spinnerUsage = new Spinner(this);
+            spinnerUsage.setAdapter(usageList);
+            spinnerUsage.setSelection(10); // set USAGE_GAME as default
+            menu2.addView(spinnerUsage);
+            Spinner spinnerContent = new Spinner(this);
+            spinnerContent.setAdapter(contentList);
+            menu2.addView(spinnerContent);
+            TextView textContent = new TextView(this);
+            textContent.setText("(AudioTrack)");
+            menu2.addView(textContent);
+            // third menu
+            LinearLayout menu3 = new LinearLayout(this);
+            menu3.setOrientation(LinearLayout.HORIZONTAL);
+            mMainView.addView(menu3);
             // AAudio button
             Button buttonAddAAudio = new Button(this);
             buttonAddAAudio.setText("Add AAudio player");
             buttonAddAAudio.setOnClickListener(v -> {
                 boolean exclusive = checkExclusive.isChecked();
-                boolean lowlatency = checkLowLatency.isChecked();
+                boolean low_latency = checkLowLatency.isChecked();
                 boolean autoplay = checkAutoPlay.isChecked();
                 String usage = spinnerUsage.getSelectedItem().toString();
-                addPlayer(PlayerType.AAudioPlayerType, exclusive, lowlatency, autoplay, usage);
+                String content = spinnerContent.getSelectedItem().toString();
+                addPlayer(PlayerType.AAudioPlayerType, exclusive, low_latency, autoplay, usage, content);
             });
-            menu2.addView(buttonAddAAudio);
+            menu3.addView(buttonAddAAudio);
             // AudioTrack button
             Button buttonAddAudioTrack = new Button(this);
             buttonAddAudioTrack.setText("Add AudioTrack player");
             buttonAddAudioTrack.setOnClickListener(v -> {
                 boolean exclusive = checkExclusive.isChecked();
-                boolean lowlatency = checkLowLatency.isChecked();
+                boolean low_latency = checkLowLatency.isChecked();
                 boolean autoplay = checkAutoPlay.isChecked();
                 String usage = spinnerUsage.getSelectedItem().toString();
-                addPlayer(PlayerType.AudioTrackPlayerType, exclusive, lowlatency, autoplay, usage);
+                String content = spinnerContent.getSelectedItem().toString();
+                addPlayer(PlayerType.AudioTrackPlayerType, exclusive, low_latency, autoplay, usage, content);
             });
-            menu2.addView(buttonAddAudioTrack);
+            menu3.addView(buttonAddAudioTrack);
             // Remove all
             Button buttonRemoveAll = new Button(this);
             buttonRemoveAll.setText("Remove all players");
             buttonRemoveAll.setOnClickListener(v -> { removeAllPlayers(); });
-            menu2.addView(buttonRemoveAll);
+            menu3.addView(buttonRemoveAll);
         }
 
         // Player list
-        ScrollView scroll = new ScrollView(this);
-        mMainView.addView(scroll);
+        mScrollView = new ScrollView(this);
+        mMainView.addView(mScrollView);
         mListView = new LinearLayout(this);
         mListView.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(mListView);
-
+        mScrollView.addView(mListView);
     }
 
     @Override

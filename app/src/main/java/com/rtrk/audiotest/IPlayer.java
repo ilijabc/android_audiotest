@@ -7,9 +7,5 @@ public interface IPlayer {
 
     void release();
 
-    boolean isExclusive();
-
-    boolean isLowLatency();
-
     boolean isMMap();
 }

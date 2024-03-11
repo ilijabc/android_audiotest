@@ -41,11 +41,11 @@ public class AudioTrackPlayer implements IPlayer {
         }
     }
 
-    public AudioTrackPlayer(int audioUsage) {
-        int sampleRate = 44100;
+    public AudioTrackPlayer(int audioUsage, int contentType) {
+        int sampleRate = 48000;
         int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
-        int contentType = AudioAttributes.CONTENT_TYPE_MUSIC;
+//        int contentType = AudioAttributes.CONTENT_TYPE_MUSIC;
 
         AudioAttributes aa = new AudioAttributes.Builder()
                 .setUsage(audioUsage)
@@ -112,16 +112,6 @@ public class AudioTrackPlayer implements IPlayer {
         mTrack.release();
         mTrack = null;
         printLog("AudioTrack player destroyed");
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return false;
-    }
-
-    @Override
-    public boolean isLowLatency() {
-        return false;
     }
 
     @Override
