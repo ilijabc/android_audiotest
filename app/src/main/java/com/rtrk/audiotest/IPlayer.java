@@ -6,4 +6,10 @@ public interface IPlayer {
     void stop();
 
     void release();
+
+    boolean isExclusive();
+
+    boolean isLowLatency();
+
+    boolean isMMap();
 }

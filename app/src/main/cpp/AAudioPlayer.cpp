@@ -5,9 +5,6 @@
 
 #define printLog(format, ...) __android_log_print(ANDROID_LOG_INFO, "audiotest", format, ##__VA_ARGS__)
 
-#define SHARING_MODE AAUDIO_SHARING_MODE_EXCLUSIVE
-#define PERFORMANCE_MODE AAUDIO_PERFORMANCE_MODE_LOW_LATENCY
-#define AUDIO_USAGE AAUDIO_USAGE_GAME
 #define SAMPLE_RATE 48000
 #define NUM_CHANNELS 2
 #define AUDIO_FORMAT AAUDIO_FORMAT_PCM_I16
@@ -15,11 +12,13 @@
 #define SINUS_SCALE 2000
 #define AAUDIO_NANOS_PER_MILLISECOND 1000000
 
-AAudioPlayer::AAudioPlayer(int player_id)
+AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage)
 {
     aaudio_result_t result;
 
     id = player_id;
+    aaudio_sharing_mode_t sharing = exclusive ? AAUDIO_SHARING_MODE_EXCLUSIVE : AAUDIO_SHARING_MODE_SHARED;
+    aaudio_performance_mode_t performance = lowlatency ? AAUDIO_PERFORMANCE_MODE_LOW_LATENCY : AAUDIO_PERFORMANCE_MODE_NONE;
 
     if (stream)
     {
@@ -37,9 +36,9 @@ AAudioPlayer::AAudioPlayer(int player_id)
 
     // Should select an output device. HDMI is default
     AAudioStreamBuilder_setDeviceId(builder, 0);
-    AAudioStreamBuilder_setSharingMode(builder, SHARING_MODE);
-    AAudioStreamBuilder_setPerformanceMode(builder, PERFORMANCE_MODE);
-    AAudioStreamBuilder_setUsage(builder, AUDIO_USAGE);
+    AAudioStreamBuilder_setSharingMode(builder, sharing);
+    AAudioStreamBuilder_setPerformanceMode(builder, performance);
+    AAudioStreamBuilder_setUsage(builder, usage);
     AAudioStreamBuilder_setSampleRate(builder, SAMPLE_RATE);
     AAudioStreamBuilder_setChannelCount(builder, NUM_CHANNELS);
     AAudioStreamBuilder_setFormat(builder, AUDIO_FORMAT);
@@ -53,16 +52,16 @@ AAudioPlayer::AAudioPlayer(int player_id)
     }
 
     // Stream created
-    bool mmap = AAudioStream_isMMapUsed(stream);
+    is_mmap = AAudioStream_isMMapUsed(stream);
     printLog("AAudio stream created: player_id=%d sharing=%d performance=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
              player_id,
-             SHARING_MODE,
-             PERFORMANCE_MODE,
-             AUDIO_USAGE,
+             sharing,
+             performance,
+             usage,
              SAMPLE_RATE,
              NUM_CHANNELS,
              AUDIO_FORMAT,
-             mmap);
+             is_mmap);
 }
 
 AAudioPlayer::~AAudioPlayer()
