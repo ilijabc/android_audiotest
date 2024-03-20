@@ -7,7 +7,7 @@
 class AAudioPlayer
 {
 public:
-    AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage);
+    AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage, int deviceId);
     virtual ~AAudioPlayer();
 
     void start();

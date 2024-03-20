@@ -1,8 +1,15 @@
 package com.rtrk.audiotest;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Pair;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -14,10 +21,15 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class MainActivity extends Activity {
+    final static private String ADD_PLAYER_ACTION = "com.rtrk.audiotest.ADD_PLAYER";
+    final static private String REMOVE_ALL_PLAYERS_ACTION = "com.rtrk.audiotest.REMOVE_ALL_PLAYERS";
+
     enum PlayerType {
         AAudioPlayerType,
         AudioTrackPlayerType
@@ -61,7 +73,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        public PlayerItemView(Context context, IPlayer player, PlayerType type, boolean exclusive, boolean low_latency, boolean isPlaying, String usage, String content) {
+        public PlayerItemView(Context context, IPlayer player, PlayerType type, boolean exclusive, boolean low_latency, boolean isPlaying, String usage, String content, int deviceId) {
             super(context);
             this.player = player;
             this.type = type;
@@ -72,7 +84,9 @@ public class MainActivity extends Activity {
 
             TextView infoText = new TextView(context);
             if (type == PlayerType.AAudioPlayerType) {
-                infoText.setText("player=" + type + " exclusive=" + exclusive + " low_latency=" + low_latency + " usage=" + usage + " mmap=" + player.isMMap());
+                infoText.setText("player=" + type + " exclusive=" + exclusive
+                        + " low_latency=" + low_latency + " usage=" + usage + " deviceId=" + deviceId
+                        + " mmap=" + player.isMMap());
             } else {
                 infoText.setText("player=" + type + " usage=" + usage + " content=" + content);
             }
@@ -93,13 +107,40 @@ public class MainActivity extends Activity {
         }
     }
 
+    class ControlReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (ADD_PLAYER_ACTION.equals(intent.getAction())) {
+                PlayerType type = PlayerType.AAudioPlayerType;
+                if (intent.hasExtra("type") && intent.getStringExtra("type").equals("audio_track"))
+                    type = PlayerType.AudioTrackPlayerType;
+                boolean exclusive = intent.getBooleanExtra("exclusive", true);
+                boolean low_latency = intent.getBooleanExtra("low_latency", true);
+                boolean autoplay = intent.getBooleanExtra("autoplay", true);
+                String usage = "USAGE_MEDIA";
+                if (intent.hasExtra("usage"))
+                    usage = intent.getStringExtra("usage");
+                String content = "CONTENT_TYPE_UNKNOWN";
+                if (intent.hasExtra("content"))
+                    content = intent.getStringExtra("content");
+                int device_id = intent.getIntExtra("device_id", 0);
+                addPlayer(type, exclusive, low_latency, autoplay, usage, content, device_id);
+            } else if (REMOVE_ALL_PLAYERS_ACTION.equals(intent.getAction())) {
+                removeAllPlayers();
+            }
+        }
+    }
+
     LinearLayout mMainView;
     LinearLayout mListView;
     ScrollView mScrollView;
 
     ArrayList<IPlayer> mPlayerList = new ArrayList<>();
 
-    private IPlayer addPlayer(PlayerType type, boolean exclusive, boolean low_latency, boolean autoplay, String usage, String content) {
+    ControlReceiver mReceiver = new ControlReceiver();
+
+    private IPlayer addPlayer(PlayerType type, boolean exclusive, boolean low_latency, boolean autoplay, String usage, String content, int deviceId) {
         int usageId = 0;
         for (Pair<String, Integer> p : mUsageList) {
             if (p.first.equals(usage)) {
@@ -118,7 +159,7 @@ public class MainActivity extends Activity {
 
         IPlayer player = null;
         if (type == PlayerType.AAudioPlayerType) {
-            player = new AAudioPlayer(exclusive, low_latency, usageId);
+            player = new AAudioPlayer(exclusive, low_latency, usageId, deviceId);
         } else {
             player = new AudioTrackPlayer(usageId, contentId);
         }
@@ -127,7 +168,7 @@ public class MainActivity extends Activity {
         }
         mPlayerList.add(player);
         {
-            PlayerItemView item = new PlayerItemView(this, player, type, exclusive, low_latency, autoplay, usage, content);
+            PlayerItemView item = new PlayerItemView(this, player, type, exclusive, low_latency, autoplay, usage, content, deviceId);
             mListView.addView(item);
             mScrollView.post(() -> { mScrollView.scrollTo(0, mScrollView.getBottom()); });
         }
@@ -160,6 +201,22 @@ public class MainActivity extends Activity {
             contentList.add(p.first);
         }
 
+        AudioDeviceInfo[] adi = null;
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            adi = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        }
+        ArrayAdapter<String> devicesList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
+        devicesList.add("0: default audio device");
+        if (adi != null) {
+            Log.d("audiotest", "Audio devices: " + adi.length);
+            for (AudioDeviceInfo info : adi) {
+                String infoText = info.getId() + ": " + info.getAddress() + " (" + info.getProductName() + ")";
+                Log.d("audiotest", "  " + infoText);
+                devicesList.add(infoText);
+            }
+        }
+
         // Main menu
         {
             // first menu
@@ -188,13 +245,16 @@ public class MainActivity extends Activity {
             Spinner spinnerUsage = new Spinner(this);
             spinnerUsage.setAdapter(usageList);
             spinnerUsage.setSelection(10); // set USAGE_GAME as default
+            spinnerUsage.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
             menu2.addView(spinnerUsage);
             Spinner spinnerContent = new Spinner(this);
             spinnerContent.setAdapter(contentList);
+            spinnerContent.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
             menu2.addView(spinnerContent);
-            TextView textContent = new TextView(this);
-            textContent.setText("(AudioTrack)");
-            menu2.addView(textContent);
+            Spinner spinnerDevice = new Spinner(this);
+            spinnerDevice.setAdapter(devicesList);
+            spinnerDevice.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
+            menu2.addView(spinnerDevice);
             // third menu
             LinearLayout menu3 = new LinearLayout(this);
             menu3.setOrientation(LinearLayout.HORIZONTAL);
@@ -208,7 +268,9 @@ public class MainActivity extends Activity {
                 boolean autoplay = checkAutoPlay.isChecked();
                 String usage = spinnerUsage.getSelectedItem().toString();
                 String content = spinnerContent.getSelectedItem().toString();
-                addPlayer(PlayerType.AAudioPlayerType, exclusive, low_latency, autoplay, usage, content);
+                int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
+                Log.d("audiotest", "deviceId=" + deviceId);
+                addPlayer(PlayerType.AAudioPlayerType, exclusive, low_latency, autoplay, usage, content, deviceId);
             });
             menu3.addView(buttonAddAAudio);
             // AudioTrack button
@@ -220,7 +282,9 @@ public class MainActivity extends Activity {
                 boolean autoplay = checkAutoPlay.isChecked();
                 String usage = spinnerUsage.getSelectedItem().toString();
                 String content = spinnerContent.getSelectedItem().toString();
-                addPlayer(PlayerType.AudioTrackPlayerType, exclusive, low_latency, autoplay, usage, content);
+                int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
+                Log.d("audiotest", "deviceId=" + deviceId);
+                addPlayer(PlayerType.AudioTrackPlayerType, exclusive, low_latency, autoplay, usage, content, deviceId);
             });
             menu3.addView(buttonAddAudioTrack);
             // Remove all
@@ -236,6 +300,15 @@ public class MainActivity extends Activity {
         mListView = new LinearLayout(this);
         mListView.setOrientation(LinearLayout.VERTICAL);
         mScrollView.addView(mListView);
+
+        // Broadcast receiver
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ADD_PLAYER_ACTION);
+        filter.addAction(REMOVE_ALL_PLAYERS_ACTION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Log.d("audiotest", "register broadcast receiver");
+            registerReceiver(mReceiver, filter, Context.RECEIVER_EXPORTED);
+        }
     }
 
     @Override

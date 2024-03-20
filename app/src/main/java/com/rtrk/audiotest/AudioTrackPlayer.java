@@ -42,7 +42,7 @@ public class AudioTrackPlayer implements IPlayer {
     }
 
     public AudioTrackPlayer(int audioUsage, int contentType) {
-        int sampleRate = 48000;
+        int sampleRate = 44100;
         int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
 //        int contentType = AudioAttributes.CONTENT_TYPE_MUSIC;

@@ -13,9 +13,9 @@ std::map<int, AAudioPlayer*> player_list;
 
 extern "C"
 JNIEXPORT int JNICALL
-Java_com_rtrk_audiotest_AAudioPlayer_createAAudioPlayer(JNIEnv *env, jobject thiz, jboolean exclusive, jboolean lowlatency, jint usage) {
+Java_com_rtrk_audiotest_AAudioPlayer_createAAudioPlayer(JNIEnv *env, jobject thiz, jboolean exclusive, jboolean lowlatency, jint usage, jint deviceId) {
     id_counter++;
-    AAudioPlayer *player = new AAudioPlayer(id_counter, exclusive, lowlatency, usage);
+    AAudioPlayer *player = new AAudioPlayer(id_counter, exclusive, lowlatency, usage, deviceId);
     player_list[id_counter] = player;
     return id_counter;
 }

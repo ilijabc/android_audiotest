@@ -12,7 +12,7 @@
 #define SINUS_SCALE 2000
 #define AAUDIO_NANOS_PER_MILLISECOND 1000000
 
-AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage)
+AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage, int deviceId)
 {
     aaudio_result_t result;
 
@@ -35,7 +35,7 @@ AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int u
     }
 
     // Should select an output device. HDMI is default
-    AAudioStreamBuilder_setDeviceId(builder, 0);
+    AAudioStreamBuilder_setDeviceId(builder, deviceId);
     AAudioStreamBuilder_setSharingMode(builder, sharing);
     AAudioStreamBuilder_setPerformanceMode(builder, performance);
     AAudioStreamBuilder_setUsage(builder, usage);
@@ -53,8 +53,9 @@ AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int u
 
     // Stream created
     is_mmap = AAudioStream_isMMapUsed(stream);
-    printLog("AAudio stream created: player_id=%d sharing=%d performance=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
+    printLog("AAudio stream created: player_id=%d device_id=%d sharing=%d performance=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
              player_id,
+             deviceId,
              sharing,
              performance,
              usage,
@@ -130,7 +131,7 @@ void AAudioPlayer::start()
     running = true;
     pitch = SINUS_SCALE * (id + 1);
     mPlaybackThread = std::thread(&AAudioPlayer::playbackThreadFunc, this);
-    printLog("start comp[leted");
+    printLog("start completed");
 }
 
 void AAudioPlayer::stop()

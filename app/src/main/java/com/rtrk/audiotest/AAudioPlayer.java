@@ -5,7 +5,7 @@ public class AAudioPlayer implements IPlayer {
         System.loadLibrary("audiotest");
     }
 
-    private native int createAAudioPlayer(boolean exclusive, boolean lowlatency, int usage);
+    private native int createAAudioPlayer(boolean exclusive, boolean lowlatency, int usage, int deviceId);
     private native void destroyAAudioPlayer(int id);
     private native void startAAudioPlayer(int id);
     private native void stopAAudioPlayer(int id);
@@ -16,8 +16,8 @@ public class AAudioPlayer implements IPlayer {
     private int player_id = -1;
     private boolean is_mmap = false;
 
-    public AAudioPlayer(boolean exclusive, boolean lowlatency, int usage) {
-        player_id = createAAudioPlayer(exclusive, lowlatency, usage);
+    public AAudioPlayer(boolean exclusive, boolean lowlatency, int usage, int deviceId) {
+        player_id = createAAudioPlayer(exclusive, lowlatency, usage, deviceId);
         is_mmap = isAAudioPlayerMMap(player_id);
     }
     @Override
