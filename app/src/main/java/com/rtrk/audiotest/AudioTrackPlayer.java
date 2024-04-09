@@ -55,6 +55,7 @@ public class AudioTrackPlayer implements IPlayer {
         AudioFormat af = new AudioFormat.Builder()
                 .setSampleRate(sampleRate)
                 .setChannelMask(channelConfig)
+                .setEncoding(audioFormat)
                 .build();
 
         int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat);
