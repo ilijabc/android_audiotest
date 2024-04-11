@@ -41,9 +41,8 @@ public class AudioTrackPlayer implements IPlayer {
         }
     }
 
-    public AudioTrackPlayer(int audioUsage, int contentType) {
-        int sampleRate = 44100;
-        int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
+    public AudioTrackPlayer(int sample_rate, int channels, int audioUsage, int contentType) {
+        int channelConfig = channels == 1 ? AudioFormat.CHANNEL_IN_MONO : AudioFormat.CHANNEL_OUT_STEREO;
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
 //        int contentType = AudioAttributes.CONTENT_TYPE_MUSIC;
 
@@ -53,15 +52,15 @@ public class AudioTrackPlayer implements IPlayer {
                 .build();
 
         AudioFormat af = new AudioFormat.Builder()
-                .setSampleRate(sampleRate)
+                .setSampleRate(sample_rate)
                 .setChannelMask(channelConfig)
                 .setEncoding(audioFormat)
                 .build();
 
-        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat);
+        int minBufferSize = AudioTrack.getMinBufferSize(sample_rate, channelConfig, audioFormat);
 
         mTrack = new AudioTrack(aa, af, minBufferSize, AudioTrack.MODE_STREAM, 0);
-        printLog("AudioTrack player created: sample_rate=" + sampleRate + " channel_config="
+        printLog("AudioTrack player created: sample_rate=" + sample_rate + " channel_config="
                 + channelConfig + " format=" + audioFormat + " usage=" + audioUsage + " content=" + contentType);
     }
 

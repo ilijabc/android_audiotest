@@ -7,7 +7,9 @@
 class AAudioPlayer
 {
 public:
-    AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage, int deviceId);
+    AAudioPlayer(int player_id,
+                 bool is_output, int sample_rate, int channels,
+                 bool exclusive, bool lowlatency, int usage, int deviceId);
     virtual ~AAudioPlayer();
 
     void start();
@@ -19,10 +21,13 @@ private:
     void playbackThreadFunc();
 
 private:
-    int id;
+    const int id;
+    const bool is_output;
+    const int sample_rate;
+    const int channels;
     AAudioStream *stream = NULL;
     std::thread mPlaybackThread;
     bool running = false;
-    int pitch = 2000;
+    int output_pitch = 2000;
     bool is_mmap = false;
 };

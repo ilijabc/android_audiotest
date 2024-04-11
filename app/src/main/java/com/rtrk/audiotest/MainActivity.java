@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Pair;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -18,6 +19,7 @@ import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
+import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -32,7 +34,8 @@ public class MainActivity extends Activity {
 
     enum PlayerType {
         AAudioPlayerType,
-        AudioTrackPlayerType
+        AudioTrackPlayerType,
+        AAudioRecorderType,
     }
 
     ArrayList<Pair<String, Integer>> mUsageList = new ArrayList<Pair<String, Integer>>() {{
@@ -83,13 +86,27 @@ public class MainActivity extends Activity {
             addView(button);
 
             TextView infoText = new TextView(context);
-            if (type == PlayerType.AAudioPlayerType) {
-                infoText.setText("player=" + type + " exclusive=" + exclusive
-                        + " low_latency=" + low_latency + " usage=" + usage + " deviceId=" + deviceId
-                        + " mmap=" + player.isMMap());
-            } else {
-                infoText.setText("player=" + type + " usage=" + usage + " content=" + content);
+            StringBuilder sb = new StringBuilder();
+            sb.append("stream=");
+            sb.append(type);
+            switch (type) {
+                case AAudioPlayerType:
+                case AAudioRecorderType:
+                    sb.append(" exclusive=");
+                    sb.append(exclusive);
+                    sb.append(" low_latency=");
+                    sb.append(low_latency);
+                    break;
+                case AudioTrackPlayerType:
+                    break;
             }
+            sb.append(" usage=");
+            sb.append(usage);
+            sb.append(" deviceId=");
+            sb.append(deviceId);
+            sb.append(" mmap=");
+            sb.append(player.isMMap());
+            infoText.setText(sb);
             addView(infoText);
 
             setOrientation(HORIZONTAL);
@@ -108,13 +125,14 @@ public class MainActivity extends Activity {
     }
 
     class ControlReceiver extends BroadcastReceiver {
-
         @Override
         public void onReceive(Context context, Intent intent) {
             if (ADD_PLAYER_ACTION.equals(intent.getAction())) {
                 PlayerType type = PlayerType.AAudioPlayerType;
                 if (intent.hasExtra("type") && intent.getStringExtra("type").equals("audio_track"))
                     type = PlayerType.AudioTrackPlayerType;
+                int sample_rate = intent.getIntExtra("sample_rate", 48000);
+                int channels = intent.getIntExtra("channels", 2);
                 boolean exclusive = intent.getBooleanExtra("exclusive", true);
                 boolean low_latency = intent.getBooleanExtra("low_latency", true);
                 boolean autoplay = intent.getBooleanExtra("autoplay", true);
@@ -125,7 +143,8 @@ public class MainActivity extends Activity {
                 if (intent.hasExtra("content"))
                     content = intent.getStringExtra("content");
                 int device_id = intent.getIntExtra("device_id", 0);
-                addPlayer(type, exclusive, low_latency, autoplay, usage, content, device_id);
+                addPlayer(type, sample_rate, channels,
+                        exclusive, low_latency, autoplay, usage, content, device_id);
             } else if (REMOVE_ALL_PLAYERS_ACTION.equals(intent.getAction())) {
                 removeAllPlayers();
             }
@@ -140,7 +159,9 @@ public class MainActivity extends Activity {
 
     ControlReceiver mReceiver = new ControlReceiver();
 
-    private IPlayer addPlayer(PlayerType type, boolean exclusive, boolean low_latency, boolean autoplay, String usage, String content, int deviceId) {
+    private IPlayer addPlayer(PlayerType type, int sample_rate, int channels,
+                              boolean exclusive, boolean low_latency, boolean autoplay,
+                              String usage, String content, int deviceId) {
         int usageId = 0;
         for (Pair<String, Integer> p : mUsageList) {
             if (p.first.equals(usage)) {
@@ -158,10 +179,16 @@ public class MainActivity extends Activity {
         }
 
         IPlayer player = null;
-        if (type == PlayerType.AAudioPlayerType) {
-            player = new AAudioPlayer(exclusive, low_latency, usageId, deviceId);
-        } else {
-            player = new AudioTrackPlayer(usageId, contentId);
+        switch (type) {
+            case AAudioPlayerType:
+                player = new AAudioPlayer(true, sample_rate, channels, exclusive, low_latency, usageId, deviceId);
+                break;
+            case AudioTrackPlayerType:
+                player = new AudioTrackPlayer(sample_rate, channels, usageId, contentId);
+                break;
+            case AAudioRecorderType:
+                player = new AAudioPlayer(false, sample_rate, channels, exclusive, low_latency, usageId, deviceId);
+                break;
         }
         if (autoplay) {
             player.start();
@@ -183,6 +210,32 @@ public class MainActivity extends Activity {
         mListView.removeAllViews();
     }
 
+    private CheckBox newCheckBox(ViewGroup parent, String text, boolean checked) {
+        CheckBox check = new CheckBox(this);
+        check.setText(text);
+        check.setChecked(checked);
+        parent.addView(check);
+        return check;
+    }
+
+    private Spinner newSpinner(ViewGroup parent, SpinnerAdapter adapter, int selected, float weight) {
+        Spinner spinner = new Spinner(this);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(selected);
+        if (weight > 0)
+            spinner.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, weight));
+        parent.addView(spinner);
+        return spinner;
+    }
+
+    private Button newButton(ViewGroup parent, String text, View.OnClickListener onClick) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setOnClickListener(onClick);
+        parent.addView(button);
+        return button;
+    }
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -190,6 +243,21 @@ public class MainActivity extends Activity {
         mMainView = new LinearLayout(this);
         mMainView.setOrientation(LinearLayout.VERTICAL);
         setContentView(mMainView);
+
+        ArrayAdapter<String> sampleRateList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
+        sampleRateList.add("8000");
+        sampleRateList.add("11025");
+        sampleRateList.add("12000");
+        sampleRateList.add("16000");
+        sampleRateList.add("22050");
+        sampleRateList.add("24000");
+        sampleRateList.add("32000");
+        sampleRateList.add("44100");
+        sampleRateList.add("48000");
+
+        ArrayAdapter<String> channelsList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
+        channelsList.add("Mono");
+        channelsList.add("Stereo");
 
         ArrayAdapter<String> usageList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
         for (Pair<String, Integer> p : mUsageList) {
@@ -204,14 +272,19 @@ public class MainActivity extends Activity {
         AudioDeviceInfo[] adi = null;
         AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            adi = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            adi = audioManager.getDevices(AudioManager.GET_DEVICES_ALL);
         }
         ArrayAdapter<String> devicesList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
         devicesList.add("0: default audio device");
         if (adi != null) {
             Log.d("audiotest", "Audio devices: " + adi.length);
             for (AudioDeviceInfo info : adi) {
-                String infoText = info.getId() + ": " + info.getAddress() + " (" + info.getProductName() + ")";
+                String type = "source";
+                if (info.isSink()) {
+                    type = "sink";
+                }
+                String infoText = info.getId() + ": [" + type + "] "
+                        + info.getAddress() + " (" + info.getProductName() + ")";
                 Log.d("audiotest", "  " + infoText);
                 devicesList.add(infoText);
             }
@@ -226,72 +299,70 @@ public class MainActivity extends Activity {
             TextView text = new TextView(this);
             text.setText("Player config: ");
             menu1.addView(text);
-            CheckBox checkExclusive = new CheckBox(this);
-            checkExclusive.setText("Exclusive (AAudio)");
-            checkExclusive.setChecked(true);
-            menu1.addView(checkExclusive);
-            CheckBox checkLowLatency = new CheckBox(this);
-            checkLowLatency.setText("Low Latency (AAudio)");
-            checkLowLatency.setChecked(true);
-            menu1.addView(checkLowLatency);
-            CheckBox checkAutoPlay = new CheckBox(this);
-            checkAutoPlay.setText("Auto Play");
-            checkAutoPlay.setChecked(true);
-            menu1.addView(checkAutoPlay);
+            CheckBox checkExclusive = newCheckBox(menu1, "Exclusive (AAudio)", true);
+            CheckBox checkLowLatency = newCheckBox(menu1, "Low Latency (AAudio)", true);
+            CheckBox checkAutoPlay = newCheckBox(menu1, "Auto Play", false);
+            Spinner spinnerSampleRate = newSpinner(menu1, sampleRateList, 8, -0.2f);
+            Spinner spinnerChannels = newSpinner(menu1, channelsList, 1, -0.2f);
             // second menu
             LinearLayout menu2 = new LinearLayout(this);
             menu2.setOrientation(LinearLayout.HORIZONTAL);
             mMainView.addView(menu2);
-            Spinner spinnerUsage = new Spinner(this);
-            spinnerUsage.setAdapter(usageList);
-            spinnerUsage.setSelection(10); // set USAGE_GAME as default
-            spinnerUsage.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
-            menu2.addView(spinnerUsage);
-            Spinner spinnerContent = new Spinner(this);
-            spinnerContent.setAdapter(contentList);
-            spinnerContent.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
-            menu2.addView(spinnerContent);
-            Spinner spinnerDevice = new Spinner(this);
-            spinnerDevice.setAdapter(devicesList);
-            spinnerDevice.setLayoutParams(new LinearLayout.LayoutParams(1, ViewGroup.LayoutParams.WRAP_CONTENT, 0.3f));
-            menu2.addView(spinnerDevice);
+            Spinner spinnerUsage = newSpinner(menu2, usageList, 10, 0.3f); // set USAGE_GAME as default
+            Spinner spinnerContent = newSpinner(menu2, contentList, 0, 0.3f);
+            Spinner spinnerDevice = newSpinner(menu2, devicesList, 0, 0.3f);
             // third menu
             LinearLayout menu3 = new LinearLayout(this);
             menu3.setOrientation(LinearLayout.HORIZONTAL);
             mMainView.addView(menu3);
             // AAudio button
-            Button buttonAddAAudio = new Button(this);
-            buttonAddAAudio.setText("Add AAudio player");
-            buttonAddAAudio.setOnClickListener(v -> {
-                boolean exclusive = checkExclusive.isChecked();
-                boolean low_latency = checkLowLatency.isChecked();
-                boolean autoplay = checkAutoPlay.isChecked();
-                String usage = spinnerUsage.getSelectedItem().toString();
-                String content = spinnerContent.getSelectedItem().toString();
-                int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
-                Log.d("audiotest", "deviceId=" + deviceId);
-                addPlayer(PlayerType.AAudioPlayerType, exclusive, low_latency, autoplay, usage, content, deviceId);
-            });
-            menu3.addView(buttonAddAAudio);
+            newButton(menu3, "Add AAudio player",
+                v -> {
+                    int sample_rate = Integer.parseInt(spinnerSampleRate.getSelectedItem().toString());
+                    int channels = spinnerChannels.getSelectedItemPosition() + 1;
+                    boolean exclusive = checkExclusive.isChecked();
+                    boolean low_latency = checkLowLatency.isChecked();
+                    boolean autoplay = checkAutoPlay.isChecked();
+                    String usage = spinnerUsage.getSelectedItem().toString();
+                    String content = spinnerContent.getSelectedItem().toString();
+                    int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
+                    Log.d("audiotest", "deviceId=" + deviceId);
+                    addPlayer(PlayerType.AAudioPlayerType, sample_rate, channels,
+                            exclusive, low_latency, autoplay, usage, content, deviceId);
+                });
             // AudioTrack button
-            Button buttonAddAudioTrack = new Button(this);
-            buttonAddAudioTrack.setText("Add AudioTrack player");
-            buttonAddAudioTrack.setOnClickListener(v -> {
-                boolean exclusive = checkExclusive.isChecked();
-                boolean low_latency = checkLowLatency.isChecked();
-                boolean autoplay = checkAutoPlay.isChecked();
-                String usage = spinnerUsage.getSelectedItem().toString();
-                String content = spinnerContent.getSelectedItem().toString();
-                int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
-                Log.d("audiotest", "deviceId=" + deviceId);
-                addPlayer(PlayerType.AudioTrackPlayerType, exclusive, low_latency, autoplay, usage, content, deviceId);
-            });
-            menu3.addView(buttonAddAudioTrack);
+            newButton(menu3, "Add AudioTrack player",
+                v -> {
+                    int sample_rate = Integer.parseInt(spinnerSampleRate.getSelectedItem().toString());
+                    int channels = spinnerChannels.getSelectedItemPosition() + 1;
+                    boolean exclusive = checkExclusive.isChecked();
+                    boolean low_latency = checkLowLatency.isChecked();
+                    boolean autoplay = checkAutoPlay.isChecked();
+                    String usage = spinnerUsage.getSelectedItem().toString();
+                    String content = spinnerContent.getSelectedItem().toString();
+                    int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
+                    Log.d("audiotest", "deviceId=" + deviceId);
+                    addPlayer(PlayerType.AudioTrackPlayerType, sample_rate, channels,
+                            exclusive, low_latency, autoplay, usage, content, deviceId);
+                });
+            // AAudio recorder button
+            newButton(menu3, "Add AAudio recorder",
+                v -> {
+                    int sample_rate = Integer.parseInt(spinnerSampleRate.getSelectedItem().toString());
+                    int channels = spinnerChannels.getSelectedItemPosition() + 1;
+                    boolean exclusive = checkExclusive.isChecked();
+                    boolean low_latency = checkLowLatency.isChecked();
+                    boolean autoplay = checkAutoPlay.isChecked();
+                    String usage = spinnerUsage.getSelectedItem().toString();
+                    String content = spinnerContent.getSelectedItem().toString();
+                    int deviceId = Integer.parseInt(spinnerDevice.getSelectedItem().toString().split(":")[0]);
+                    Log.d("audiotest", "deviceId=" + deviceId);
+                    addPlayer(PlayerType.AAudioRecorderType, sample_rate, channels,
+                            exclusive, low_latency, autoplay, usage, content, deviceId);
+                });
             // Remove all
-            Button buttonRemoveAll = new Button(this);
-            buttonRemoveAll.setText("Remove all players");
-            buttonRemoveAll.setOnClickListener(v -> { removeAllPlayers(); });
-            menu3.addView(buttonRemoveAll);
+            newButton(menu3, "Remove all",
+                v -> { removeAllPlayers(); });
         }
 
         // Player list

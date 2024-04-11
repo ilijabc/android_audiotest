@@ -5,20 +5,24 @@
 
 #define printLog(format, ...) __android_log_print(ANDROID_LOG_INFO, "audiotest", format, ##__VA_ARGS__)
 
-#define SAMPLE_RATE 48000
-#define NUM_CHANNELS 2
 #define AUDIO_FORMAT AAUDIO_FORMAT_PCM_I16
 
 #define SINUS_SCALE 2000
 #define AAUDIO_NANOS_PER_MILLISECOND 1000000
 
-AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int usage, int deviceId)
+AAudioPlayer::AAudioPlayer(int player_id,
+                           bool is_output, int sample_rate, int channels,
+                           bool exclusive, bool low_latency, int usage, int deviceId)
+                           : id(player_id)
+                           , is_output(is_output)
+                           , sample_rate(sample_rate)
+                           , channels(channels)
 {
     aaudio_result_t result;
 
-    id = player_id;
     aaudio_sharing_mode_t sharing = exclusive ? AAUDIO_SHARING_MODE_EXCLUSIVE : AAUDIO_SHARING_MODE_SHARED;
-    aaudio_performance_mode_t performance = lowlatency ? AAUDIO_PERFORMANCE_MODE_LOW_LATENCY : AAUDIO_PERFORMANCE_MODE_NONE;
+    aaudio_performance_mode_t performance = low_latency ? AAUDIO_PERFORMANCE_MODE_LOW_LATENCY : AAUDIO_PERFORMANCE_MODE_NONE;
+    aaudio_direction_t direction = is_output ? AAUDIO_DIRECTION_OUTPUT : AAUDIO_DIRECTION_INPUT;
 
     if (stream)
     {
@@ -39,10 +43,10 @@ AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int u
     AAudioStreamBuilder_setSharingMode(builder, sharing);
     AAudioStreamBuilder_setPerformanceMode(builder, performance);
     AAudioStreamBuilder_setUsage(builder, usage);
-    AAudioStreamBuilder_setSampleRate(builder, SAMPLE_RATE);
-    AAudioStreamBuilder_setChannelCount(builder, NUM_CHANNELS);
+    AAudioStreamBuilder_setSampleRate(builder, sample_rate);
+    AAudioStreamBuilder_setChannelCount(builder, channels);
     AAudioStreamBuilder_setFormat(builder, AUDIO_FORMAT);
-    AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
+    AAudioStreamBuilder_setDirection(builder, direction);
     result = AAudioStreamBuilder_openStream(builder, &(stream));
     AAudioStreamBuilder_delete(builder);
     if (result != AAUDIO_OK)
@@ -53,14 +57,15 @@ AAudioPlayer::AAudioPlayer(int player_id, bool exclusive, bool lowlatency, int u
 
     // Stream created
     is_mmap = AAudioStream_isMMapUsed(stream);
-    printLog("AAudio stream created: player_id=%d device_id=%d sharing=%d performance=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
+    printLog("AAudio stream created: player_id=%d device_id=%d sharing=%d performance=%d direction=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
              player_id,
              deviceId,
              sharing,
              performance,
+             direction,
              usage,
-             SAMPLE_RATE,
-             NUM_CHANNELS,
+             sample_rate,
+             channels,
              AUDIO_FORMAT,
              is_mmap);
 }
@@ -69,10 +74,7 @@ AAudioPlayer::~AAudioPlayer()
 {
     aaudio_result_t result;
 
-    if (running)
-    {
-        stop();
-    }
+    stop();
 
     result = AAudioStream_close(stream);
     if (result != AAUDIO_OK)
@@ -91,12 +93,15 @@ void AAudioPlayer::playbackThreadFunc()
     {
         for (int i = 0; i < size; i++)
         {
-            double x = (double)i / (double)size * 2 * 3.1415 * pitch;
+            double x = (double)i / (double)size * 2 * 3.1415 * output_pitch;
             double y = sin(x);
             buffer[i] = y * 255;
         }
-        aaudio_result_t result = AAudioStream_write(stream, buffer, size / (NUM_CHANNELS * 2), 0);
-//        usleep(100);
+        aaudio_result_t result = AAudioStream_write(stream, buffer, size / (channels * 2), 0);
+        if (result != AAUDIO_OK) {
+            printLog("AAudioStream_write ERROR: %d", result);
+        }
+        // usleep(100);
     }
     printLog("AAudio playback thread stopped: player_id=%d", id);
 }
@@ -128,9 +133,11 @@ void AAudioPlayer::start()
     }
 
     // start playback thread
-    running = true;
-    pitch = SINUS_SCALE * (id + 1);
-    mPlaybackThread = std::thread(&AAudioPlayer::playbackThreadFunc, this);
+    if (is_output) {
+        running = true;
+        output_pitch = SINUS_SCALE * (id + 1);
+        mPlaybackThread = std::thread(&AAudioPlayer::playbackThreadFunc, this);
+    }
     printLog("start completed");
 }
 
@@ -144,8 +151,10 @@ void AAudioPlayer::stop()
         return;
     }
 
-    running = false;
-    mPlaybackThread.join();
+    if (running) {
+        running = false;
+        mPlaybackThread.join();
+    }
 
     aaudio_stream_state_t inputState = AAUDIO_STREAM_STATE_STOPPING;
     aaudio_stream_state_t nextState = AAUDIO_STREAM_STATE_UNINITIALIZED;
