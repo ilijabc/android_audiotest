@@ -1,5 +1,6 @@
 package com.rtrk.audiotest;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -21,7 +22,9 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
@@ -228,9 +231,22 @@ public class MainActivity extends Activity {
         return button;
     }
 
+    public static final int REQUEST_AUDIO_PERMISSION_CODE = 1;
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_AUDIO_PERMISSION_CODE:
+                Toast.makeText(getApplicationContext(), "Audio reording permission granted.", Toast.LENGTH_LONG);
+                break;
+        }
+    }
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO }, REQUEST_AUDIO_PERMISSION_CODE);
 
         mMainView = new LinearLayout(this);
         mMainView.setOrientation(LinearLayout.VERTICAL);
