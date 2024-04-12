@@ -4,6 +4,9 @@ import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
+import android.os.Build;
+
+import androidx.annotation.NonNull;
 
 public class AudioTrackPlayer implements IPlayer {
     AudioTrack mTrack;
@@ -117,5 +120,29 @@ public class AudioTrackPlayer implements IPlayer {
     @Override
     public boolean isMMap() {
         return false;
+    }
+
+    @Override
+    public boolean isPlaying() {
+        return mRunning;
+    }
+
+    @NonNull
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("AudioTrack:");
+        sb.append(" direction=OUTPUT");
+        sb.append(" sample_rate=");
+        sb.append(mTrack.getSampleRate());
+        sb.append(" channels=");
+        sb.append(mTrack.getChannelCount());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            sb.append(" usage=");
+            sb.append(MainActivity.usageToString(mTrack.getAudioAttributes().getUsage()).substring(6));
+        }
+        sb.append(" device_id=");
+        sb.append(mTrack.getRoutedDevice().getId());
+        return sb.toString();
     }
 }

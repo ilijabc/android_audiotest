@@ -14,8 +14,9 @@ public:
 
     void start();
     void stop();
-
-    inline bool isMMap() const { return is_mmap; }
+    bool isMMap() const;
+    bool isRunning() const;
+    std::string toString() const;
 
 private:
     void playbackThreadFunc();
@@ -29,5 +30,4 @@ private:
     std::thread mPlaybackThread;
     bool running = false;
     int output_pitch = 2000;
-    bool is_mmap = false;
 };

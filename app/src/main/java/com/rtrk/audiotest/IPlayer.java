@@ -8,4 +8,6 @@ public interface IPlayer {
     void release();
 
     boolean isMMap();
+
+    boolean isPlaying();
 }

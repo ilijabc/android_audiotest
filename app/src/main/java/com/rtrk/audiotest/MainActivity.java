@@ -38,7 +38,15 @@ public class MainActivity extends Activity {
         AAudioRecorderType,
     }
 
-    ArrayList<Pair<String, Integer>> mUsageList = new ArrayList<Pair<String, Integer>>() {{
+    public static String usageToString(int usage) {
+        for (Pair<String, Integer> pair : mUsageList) {
+            if (pair.second == usage)
+                return pair.first;
+        }
+        return "?";
+    }
+
+    static ArrayList<Pair<String, Integer>> mUsageList = new ArrayList<Pair<String, Integer>>() {{
         add(new Pair("USAGE_MEDIA", 1));
         add(new Pair("USAGE_VOICE_COMMUNICATION", 2));
         add(new Pair("USAGE_VOICE_COMMUNICATION_SIGNALLING", 3));
@@ -53,7 +61,7 @@ public class MainActivity extends Activity {
         add(new Pair("USAGE_ASSISTANT", 16));
     }};
 
-    ArrayList<Pair<String, Integer>> mContentList = new ArrayList<Pair<String, Integer>>() {{
+    static ArrayList<Pair<String, Integer>> mContentList = new ArrayList<Pair<String, Integer>>() {{
         add(new Pair("CONTENT_TYPE_UNKNOWN", 0));
         add(new Pair("CONTENT_TYPE_SPEECH", 1));
         add(new Pair("CONTENT_TYPE_MUSIC", 2));
@@ -63,64 +71,39 @@ public class MainActivity extends Activity {
 
     class PlayerItemView extends LinearLayout {
         private final IPlayer player;
-        private final PlayerType type;
-        private boolean isPlaying = true;
 
-        private Button button;
+        private Button buttonPlayStop;
+        private TextView infoText;
 
         private void updateText() {
-            if (isPlaying) {
-                button.setText("Stop");
+            if (player.isPlaying()) {
+                buttonPlayStop.setText("Stop");
             } else {
-                button.setText("Play");
+                buttonPlayStop.setText("Play");
             }
+            infoText.setText(player.toString());
         }
 
-        public PlayerItemView(Context context, IPlayer player, PlayerType type, boolean exclusive, boolean low_latency, boolean isPlaying, String usage, String content, int deviceId) {
+        public PlayerItemView(Context context, IPlayer player) {
             super(context);
             this.player = player;
-            this.type = type;
-            this.isPlaying = isPlaying;
 
-            button = new Button(context);
-            addView(button);
+            buttonPlayStop = new Button(context);
+            buttonPlayStop.setOnClickListener(v -> {
+                if (player.isPlaying()) {
+                    player.stop();
+                } else {
+                    player.start();
+                }
+                updateText();
+            });
+            addView(buttonPlayStop);
 
-            TextView infoText = new TextView(context);
-            StringBuilder sb = new StringBuilder();
-            sb.append("stream=");
-            sb.append(type);
-            switch (type) {
-                case AAudioPlayerType:
-                case AAudioRecorderType:
-                    sb.append(" exclusive=");
-                    sb.append(exclusive);
-                    sb.append(" low_latency=");
-                    sb.append(low_latency);
-                    break;
-                case AudioTrackPlayerType:
-                    break;
-            }
-            sb.append(" usage=");
-            sb.append(usage);
-            sb.append(" deviceId=");
-            sb.append(deviceId);
-            sb.append(" mmap=");
-            sb.append(player.isMMap());
-            infoText.setText(sb);
+            infoText = new TextView(context);
             addView(infoText);
 
             setOrientation(HORIZONTAL);
             updateText();
-
-            button.setOnClickListener(v -> {
-                this.isPlaying = !this.isPlaying;
-                if (this.isPlaying) {
-                    player.start();
-                } else {
-                    player.stop();
-                }
-                updateText();
-            });
         }
     }
 
@@ -195,7 +178,7 @@ public class MainActivity extends Activity {
         }
         mPlayerList.add(player);
         {
-            PlayerItemView item = new PlayerItemView(this, player, type, exclusive, low_latency, autoplay, usage, content, deviceId);
+            PlayerItemView item = new PlayerItemView(this, player);
             mListView.addView(item);
             mScrollView.post(() -> { mScrollView.scrollTo(0, mScrollView.getBottom()); });
         }
@@ -208,6 +191,15 @@ public class MainActivity extends Activity {
         }
         mPlayerList.clear();
         mListView.removeAllViews();
+    }
+
+    void updatePlayers() {
+        for (int i = 0; i < mListView.getChildCount(); i++) {
+            if (mListView.getChildAt(i) instanceof PlayerItemView) {
+                PlayerItemView item = (PlayerItemView)mListView.getChildAt(i);
+                item.updateText();
+            }
+        }
     }
 
     private CheckBox newCheckBox(ViewGroup parent, String text, boolean checked) {
@@ -269,22 +261,25 @@ public class MainActivity extends Activity {
             contentList.add(p.first);
         }
 
-        AudioDeviceInfo[] adi = null;
+        AudioDeviceInfo[] outputDevices = null;
+        AudioDeviceInfo[] inputDevices = null;
         AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            adi = audioManager.getDevices(AudioManager.GET_DEVICES_ALL);
+            outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
         }
         ArrayAdapter<String> devicesList = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item);
         devicesList.add("0: default audio device");
-        if (adi != null) {
-            Log.d("audiotest", "Audio devices: " + adi.length);
-            for (AudioDeviceInfo info : adi) {
-                String type = "source";
-                if (info.isSink()) {
-                    type = "sink";
-                }
-                String infoText = info.getId() + ": [" + type + "] "
-                        + info.getAddress() + " (" + info.getProductName() + ")";
+        if (outputDevices != null) {
+            for (AudioDeviceInfo info : outputDevices) {
+                String infoText = info.getId() + ": [OUTPUT] " + info.getAddress() + " (" + info.getProductName() + ")";
+                Log.d("audiotest", "  " + infoText);
+                devicesList.add(infoText);
+            }
+        }
+        if (inputDevices != null) {
+            for (AudioDeviceInfo info : inputDevices) {
+                String infoText = info.getId() + ": [INPUT] " + info.getAddress() + " (" + info.getProductName() + ")";
                 Log.d("audiotest", "  " + infoText);
                 devicesList.add(infoText);
             }
@@ -363,6 +358,9 @@ public class MainActivity extends Activity {
             // Remove all
             newButton(menu3, "Remove all",
                 v -> { removeAllPlayers(); });
+            // Update
+            newButton(menu3, "Update",
+                v -> { updatePlayers(); });
         }
 
         // Player list

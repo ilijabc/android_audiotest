@@ -62,3 +62,19 @@ Java_com_rtrk_audiotest_AAudioPlayer_isAAudioPlayerMMap(JNIEnv *env, jobject thi
     AAudioPlayer *player = player_list[player_id];
     return player->isMMap();
 }
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_rtrk_audiotest_AAudioPlayer_isAAudioPlayerRunning(JNIEnv *env, jobject thiz, jint player_id) {
+    AAudioPlayer *player = player_list[player_id];
+    return player->isRunning();
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_rtrk_audiotest_AAudioPlayer_getAAudioPlayerString(JNIEnv *env, jobject thiz, jint player_id) {
+    AAudioPlayer *player = player_list[player_id];
+    std::string info = player->toString();
+    jstring result = env->NewStringUTF(info.c_str());
+    return result;
+}

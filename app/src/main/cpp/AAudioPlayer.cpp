@@ -56,7 +56,7 @@ AAudioPlayer::AAudioPlayer(int player_id,
     }
 
     // Stream created
-    is_mmap = AAudioStream_isMMapUsed(stream);
+    bool is_mmap = AAudioStream_isMMapUsed(stream);
     printLog("AAudio stream created: player_id=%d device_id=%d sharing=%d performance=%d direction=%d usage=%d sample_rate=%d num_channels=%d format=%d mmap=%d",
              player_id,
              deviceId,
@@ -173,4 +173,68 @@ void AAudioPlayer::stop()
         printLog("AAudio wait for stop failed: result=%d", result);
         return;
     }
+}
+
+bool AAudioPlayer::isMMap() const
+{
+    return AAudioStream_isMMapUsed(stream);
+}
+
+bool AAudioPlayer::isRunning() const
+{
+    return running;
+}
+
+static struct UsageIdToStr
+{
+    int usage_id;
+    const char *usage_str;
+} g_usage_map[] = {
+        { AAUDIO_USAGE_MEDIA, "MEDIA" },
+        { AAUDIO_USAGE_VOICE_COMMUNICATION, "VOICE_COMMUNICATION" },
+        { AAUDIO_USAGE_VOICE_COMMUNICATION_SIGNALLING, "VOICE_COMMUNICATION_SIGNALLING" },
+        { AAUDIO_USAGE_ALARM, "ALARM" },
+        { AAUDIO_USAGE_NOTIFICATION, "NOTIFICATION" },
+        { AAUDIO_USAGE_NOTIFICATION_RINGTONE, "NOTIFICATION_RINGTONE" },
+        { AAUDIO_USAGE_NOTIFICATION_EVENT, "NOTIFICATION_EVENT" },
+        { AAUDIO_USAGE_ASSISTANCE_ACCESSIBILITY, "ASSISTANCE_ACCESSIBILITY" },
+        { AAUDIO_USAGE_ASSISTANCE_NAVIGATION_GUIDANCE, "ASSISTANCE_NAVIGATION_GUIDANCE" },
+        { AAUDIO_USAGE_ASSISTANCE_SONIFICATION, "ASSISTANCE_SONIFICATION" },
+        { AAUDIO_USAGE_GAME, "GAME" },
+        { AAUDIO_USAGE_ASSISTANT, "ASSISTANT" },
+        { 0, "?" }
+};
+
+std::string AAudioPlayer::toString() const
+{
+    if (stream == nullptr)
+    {
+        return "N/A";
+    }
+
+    int direction = AAudioStream_getDirection(stream);
+    int sample_rate = AAudioStream_getSampleRate(stream);
+    int channels = AAudioStream_getChannelCount(stream);
+    int exclusive = AAudioStream_getSharingMode(stream) == AAUDIO_SHARING_MODE_EXCLUSIVE;
+    int low_latency = AAudioStream_getPerformanceMode(stream) == AAUDIO_PERFORMANCE_MODE_LOW_LATENCY;
+    int usage = AAudioStream_getUsage(stream);
+    int device_id = AAudioStream_getDeviceId(stream);
+    bool mmap = AAudioStream_isMMapUsed(stream);
+
+    const char *usage_str = nullptr;
+    for (int i = 0; g_usage_map[i].usage_id; i++)
+    {
+        if (usage == g_usage_map[i].usage_id) {
+            usage_str = g_usage_map[i].usage_str;
+            break;
+        }
+    }
+
+    const int size = 200;
+    char buf[size];
+    snprintf(buf, size,
+             "AAudio: direction=%s sample_rate=%d channels=%d usage=%s device_id=%d exclusive=%d low_latency=%d mmap=%d",
+             direction == AAUDIO_DIRECTION_OUTPUT ? "OUTPUT" : "INPUT",
+             sample_rate, channels, usage_str, device_id, exclusive, low_latency, mmap);
+    return std::string(buf);
 }
